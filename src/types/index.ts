@@ -143,67 +143,6 @@ export interface Alert {
     time: string;
 }
 
-export interface ApiPagination {
-    currentPage: number;
-    totalPages: number;
-    totalItems: number;
-    itemsPerPage?: number;
-}
-
-export interface ApiResponse<T> {
-    success: boolean;
-    message?: string;
-    data: T;
-    pagination?: ApiPagination;
-}
-
-export interface StudentApiRecord {
-    _id?: string;
-    id?: string;
-    rollNumber?: string;
-    name?: string;
-    gender?: string;
-    feeStatus?: string;
-    status?: string;
-    classId?: string | { className?: string };
-    sectionId?: string | { sectionName?: string };
-    parentContact?: {
-        email?: string;
-        parentName?: string;
-        phone?: string;
-    };
-}
-
-export interface TeacherSubject {
-    _id?: string;
-    subjectName?: string;
-}
-
-export interface TeacherApiRecord {
-    _id?: string;
-    id?: string;
-    employeeId?: string;
-    name?: string;
-    email?: string;
-    phone?: string;
-    qualification?: string;
-    experience?: number;
-    status?: string;
-    subjects?: TeacherSubject[];
-}
-
-export interface TeacherTableRow {
-    id: string;
-    employeeId: string;
-    name: string;
-    email: string;
-    phone: string;
-    qualification: string;
-    experience: number;
-    status: string;
-    subjects: TeacherSubject[];
-}
-
 export interface StudentTableRow {
     id: string;
     rollNo: string;

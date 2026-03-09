@@ -1,11 +1,101 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Upload, Check } from 'lucide-react';
+import { firebaseStudentService } from '../../services/firebaseStudentService';
+import { firebaseClassService } from '../../services/firebaseClassService';
+import type { ClassSection, Gender } from '../../types';
 
 const sections = ['Personal Information', 'Academic Details', 'Parent / Guardian', 'Documents'];
 
 export default function NewAdmissionPage() {
+    const navigate = useNavigate();
+    const [classSections, setClassSections] = useState<ClassSection[]>([]);
     const [step, setStep] = useState(0);
     const [submitted, setSubmitted] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState('');
+    const [createdRollNo, setCreatedRollNo] = useState('');
+    const [formData, setFormData] = useState({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        dob: '',
+        bloodGroup: '',
+        address: '',
+        gender: '' as '' | Gender,
+        studentClass: '',
+        section: '',
+        admissionDate: '',
+        fatherName: '',
+        fatherPhone: '',
+        motherName: '',
+        motherPhone: '',
+    });
+
+    const updateField = (field: keyof typeof formData, value: string) => {
+        setFormData((prev) => ({ ...prev, [field]: value }));
+    };
+
+    useEffect(() => {
+        const loadClassSections = async () => {
+            try {
+                const data = await firebaseClassService.getClasses();
+                setClassSections(data);
+            } catch (err) {
+                console.error('Error loading class sections:', err);
+                setClassSections([]);
+            }
+        };
+
+        loadClassSections();
+    }, []);
+
+    const availableClasses = Array.from(new Set(classSections.map((cs) => cs.name))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const availableSections = classSections
+        .filter((cs) => cs.name === formData.studentClass)
+        .map((cs) => cs.section);
+
+    const submitAdmission = async () => {
+        setError('');
+        if (!formData.firstName || !formData.email || !formData.phone || !formData.gender || !formData.studentClass || !formData.section || !formData.admissionDate || !formData.fatherName || !formData.fatherPhone || !formData.address || !formData.dob) {
+            setError('Please complete all required fields before submitting.');
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            const count = await firebaseStudentService.getStudentCount();
+            const rollNo = `S${String(count + 1).padStart(3, '0')}`;
+            const fullName = `${formData.firstName} ${formData.lastName}`.trim();
+
+            await firebaseStudentService.addStudent({
+                rollNo,
+                name: fullName,
+                email: formData.email,
+                phone: formData.phone,
+                gender: formData.gender,
+                dob: formData.dob,
+                class: formData.studentClass,
+                section: formData.section,
+                parentName: formData.fatherName,
+                parentPhone: formData.fatherPhone,
+                address: formData.address,
+                admissionDate: formData.admissionDate,
+                status: 'active',
+                bloodGroup: formData.bloodGroup || undefined,
+                feeStatus: 'pending',
+            });
+
+            setCreatedRollNo(rollNo);
+            setSubmitted(true);
+        } catch (err) {
+            console.error('Error submitting admission:', err);
+            setError('Failed to submit admission. Check Firestore rules and try again.');
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     if (submitted) {
         return (
@@ -15,11 +105,16 @@ export default function NewAdmissionPage() {
                 </div>
                 <div className="text-center">
                     <h2 className="text-2xl font-bold text-white">Admission Submitted!</h2>
-                    <p className="text-slate-400 mt-2">The admission form has been submitted successfully.<br />Roll No: <span className="text-violet-400 font-mono">S011</span></p>
+                    <p className="text-slate-400 mt-2">The admission form has been submitted successfully.<br />Roll No: <span className="text-violet-400 font-mono">{createdRollNo}</span></p>
                 </div>
-                <button className="btn-primary" onClick={() => { setSubmitted(false); setStep(0); }}>
-                    New Admission
-                </button>
+                <div className="flex items-center gap-3">
+                    <button className="btn-secondary" onClick={() => navigate('/students')}>
+                        Go To Students
+                    </button>
+                    <button className="btn-primary" onClick={() => { setSubmitted(false); setStep(0); }}>
+                        New Admission
+                    </button>
+                </div>
             </div>
         );
     }
@@ -54,29 +149,49 @@ export default function NewAdmissionPage() {
             <div className="glass-card p-6">
                 <h2 className="text-base font-semibold text-white mb-6">{sections[step]}</h2>
 
+                {error && (
+                    <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                        {error}
+                    </div>
+                )}
+
                 {step === 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                        {[
-                            { label: 'First Name', placeholder: 'Enter first name' },
-                            { label: 'Last Name', placeholder: 'Enter last name' },
-                            { label: 'Email', placeholder: 'student@school.edu', type: 'email' },
-                            { label: 'Phone', placeholder: '9876543210', type: 'tel' },
-                            { label: 'Date of Birth', type: 'date' },
-                            { label: 'Blood Group', placeholder: 'e.g. O+' },
-                            { label: 'Address', placeholder: 'Full address' },
-                        ].map(f => (
-                            <div key={f.label} className={f.label === 'Address' ? 'sm:col-span-2' : ''}>
-                                <label className="block text-xs font-medium text-slate-400 mb-1.5">{f.label}</label>
-                                <input type={f.type || 'text'} placeholder={f.placeholder} className="input-field" />
-                            </div>
-                        ))}
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">First Name</label>
+                            <input value={formData.firstName} onChange={(e) => updateField('firstName', e.target.value)} type="text" placeholder="Enter first name" className="input-field" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Last Name</label>
+                            <input value={formData.lastName} onChange={(e) => updateField('lastName', e.target.value)} type="text" placeholder="Enter last name" className="input-field" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Email</label>
+                            <input value={formData.email} onChange={(e) => updateField('email', e.target.value)} type="email" placeholder="student@school.edu" className="input-field" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Phone</label>
+                            <input value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} type="tel" placeholder="9876543210" className="input-field" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Date of Birth</label>
+                            <input value={formData.dob} onChange={(e) => updateField('dob', e.target.value)} type="date" className="input-field" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Blood Group</label>
+                            <input value={formData.bloodGroup} onChange={(e) => updateField('bloodGroup', e.target.value)} type="text" placeholder="e.g. O+" className="input-field" />
+                        </div>
+                        <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Address</label>
+                            <input value={formData.address} onChange={(e) => updateField('address', e.target.value)} type="text" placeholder="Full address" className="input-field" />
+                        </div>
                         <div>
                             <label className="block text-xs font-medium text-slate-400 mb-1.5">Gender</label>
-                            <select className="select-field">
+                            <select value={formData.gender} onChange={(e) => updateField('gender', e.target.value)} className="select-field">
                                 <option value="">Select Gender</option>
-                                <option>Male</option>
-                                <option>Female</option>
-                                <option>Other</option>
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                                <option value="other">Other</option>
                             </select>
                         </div>
                     </div>
@@ -84,46 +199,50 @@ export default function NewAdmissionPage() {
 
                 {step === 1 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                        {[
-                            { label: 'Class', type: 'select', options: ['6', '7', '8', '9', '10'] },
-                            { label: 'Section', type: 'select', options: ['A', 'B', 'C'] },
-                            { label: 'Admission Date', type: 'date' },
-                            { label: 'Previous School', placeholder: 'Name of previous school' },
-                            { label: 'Previous Class', placeholder: 'e.g. Class 9' },
-                            { label: 'Percentage', placeholder: 'e.g. 87%' },
-                        ].map(f => (
-                            <div key={f.label}>
-                                <label className="block text-xs font-medium text-slate-400 mb-1.5">{f.label}</label>
-                                {f.type === 'select' ? (
-                                    <select className="select-field">
-                                        <option value="">Select {f.label}</option>
-                                        {f.options?.map(o => <option key={o}>{o}</option>)}
-                                    </select>
-                                ) : (
-                                    <input type={f.type || 'text'} placeholder={f.placeholder} className="input-field" />
-                                )}
-                            </div>
-                        ))}
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Class</label>
+                            <select value={formData.studentClass} onChange={(e) => updateField('studentClass', e.target.value)} className="select-field">
+                                <option value="">Select Class</option>
+                                {availableClasses.map((c) => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Section</label>
+                            <select
+                                value={formData.section}
+                                onChange={(e) => updateField('section', e.target.value)}
+                                className="select-field"
+                                disabled={!formData.studentClass}
+                            >
+                                <option value="">Select Section</option>
+                                {availableSections.map((s) => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Admission Date</label>
+                            <input value={formData.admissionDate} onChange={(e) => updateField('admissionDate', e.target.value)} type="date" className="input-field" />
+                        </div>
                     </div>
                 )}
 
                 {step === 2 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                        {[
-                            { label: "Father's Name", placeholder: "Father's full name" },
-                            { label: "Father's Phone", placeholder: '9876543210', type: 'tel' },
-                            { label: "Mother's Name", placeholder: "Mother's full name" },
-                            { label: "Mother's Phone", placeholder: '9876543210', type: 'tel' },
-                            { label: 'Email', placeholder: 'parent@email.com', type: 'email' },
-                            { label: 'Occupation', placeholder: 'e.g. Engineer' },
-                            { label: 'Emergency Contact', placeholder: '9876543210', type: 'tel' },
-                            { label: 'Relation', placeholder: 'e.g. Uncle' },
-                        ].map(f => (
-                            <div key={f.label}>
-                                <label className="block text-xs font-medium text-slate-400 mb-1.5">{f.label}</label>
-                                <input type={f.type || 'text'} placeholder={f.placeholder} className="input-field" />
-                            </div>
-                        ))}
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Father's Name</label>
+                            <input value={formData.fatherName} onChange={(e) => updateField('fatherName', e.target.value)} type="text" placeholder="Father's full name" className="input-field" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Father's Phone</label>
+                            <input value={formData.fatherPhone} onChange={(e) => updateField('fatherPhone', e.target.value)} type="tel" placeholder="9876543210" className="input-field" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Mother's Name</label>
+                            <input value={formData.motherName} onChange={(e) => updateField('motherName', e.target.value)} type="text" placeholder="Mother's full name" className="input-field" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Mother's Phone</label>
+                            <input value={formData.motherPhone} onChange={(e) => updateField('motherPhone', e.target.value)} type="tel" placeholder="9876543210" className="input-field" />
+                        </div>
                     </div>
                 )}
 
@@ -156,7 +275,7 @@ export default function NewAdmissionPage() {
                             Next <ChevronRight className="w-4 h-4" />
                         </button>
                     ) : (
-                        <button onClick={() => setSubmitted(true)} className="btn-primary">
+                        <button onClick={submitAdmission} disabled={submitting} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
                             <Check className="w-4 h-4" /> Submit Admission
                         </button>
                     )}

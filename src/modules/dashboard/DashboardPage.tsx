@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Users, GraduationCap, BookOpen, DollarSign, AlertTriangle, Info, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { KPICard } from '../../components/ui/KPICard';
 import { FeeCollectionChart, AttendanceTrendChart, ClassAttendanceChart } from '../../components/charts/Charts';
-import { dashboardService } from '../../services/dashboardService';
+import { firebaseDashboardService } from '../../services/firebaseDashboardService';
 import type { Alert, DashboardOverview, DashboardTrends } from '../../types';
 
 const alertIcons: Record<string, React.ElementType> = {
@@ -43,12 +43,12 @@ export default function DashboardPage() {
             setLoading(true);
             try {
                 const [overviewRes, trendsRes] = await Promise.all([
-                    dashboardService.getOverview(),
-                    dashboardService.getTrends()
+                    firebaseDashboardService.getOverview(),
+                    firebaseDashboardService.getTrends()
                 ]);
 
-                if (overviewRes.success) setDashboardData(overviewRes.data);
-                if (trendsRes.success) setTrends(trendsRes.data);
+                setDashboardData(overviewRes);
+                setTrends(trendsRes);
             } catch (error) {
                 console.error('Error fetching dashboard data:', error);
             } finally {

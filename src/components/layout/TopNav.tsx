@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { Search, Bell, ChevronDown, User, Settings, LogOut, Menu } from 'lucide-react';
+import { firebaseAuthService } from '../../services/firebaseAuthService';
 
 interface TopNavProps {
     sidebarCollapsed: boolean;
@@ -14,11 +16,22 @@ const notifications = [
 ];
 
 export default function TopNav({ sidebarCollapsed, onMobileMenuOpen }: TopNavProps) {
+    const navigate = useNavigate();
     const [profileOpen, setProfileOpen] = useState(false);
     const [notifOpen, setNotifOpen] = useState(false);
     const [searchFocused, setSearchFocused] = useState(false);
     const profileRef = useRef<HTMLDivElement>(null);
     const notifRef = useRef<HTMLDivElement>(null);
+
+    const handleLogout = async () => {
+        try {
+            await firebaseAuthService.logout();
+            localStorage.removeItem('currentUser');
+            navigate('/login');
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+    };
 
     useEffect(() => {
         const handler = (e: MouseEvent) => {
@@ -120,16 +133,21 @@ export default function TopNav({ sidebarCollapsed, onMobileMenuOpen }: TopNavPro
                                 <div className="text-xs text-slate-400">admin@educampus.edu</div>
                             </div>
                             {[
-                                { icon: User, label: 'Profile' },
-                                { icon: Settings, label: 'Settings' },
+                                { icon: User, label: 'Profile', path: '/profile' },
+                                { icon: Settings, label: 'Settings', path: '/settings' },
                             ].map(item => (
-                                <button key={item.label} className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
+                                <Link
+                                    key={item.label}
+                                    to={item.path}
+                                    onClick={() => setProfileOpen(false)}
+                                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+                                >
                                     <item.icon className="w-4 h-4" />
                                     {item.label}
-                                </button>
+                                </Link>
                             ))}
                             <div className="border-t border-white/8 mt-1">
-                                <button className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/8 transition-colors">
+                                <button onClick={handleLogout} className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/8 transition-colors">
                                     <LogOut className="w-4 h-4" />
                                     Logout
                                 </button>
