@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
     LayoutDashboard, Users, GraduationCap, BookOpen,
-    DollarSign, CalendarCheck, MessageSquare, BarChart3,
-    Brain, Settings, ChevronDown, ChevronRight,
+    DollarSign, MessageSquare, BarChart3,
+    Brain, Settings, ChevronDown, ChevronRight, Briefcase,
     School, Menu, X
 } from 'lucide-react';
 
@@ -14,7 +14,9 @@ interface NavItem {
     children?: { label: string; path: string }[];
 }
 
-const navItems: NavItem[] = [
+type UserRole = 'admin' | 'teacher' | 'student';
+
+const adminNavItems: NavItem[] = [
     { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
     {
         label: 'Students', icon: Users,
@@ -31,6 +33,16 @@ const navItems: NavItem[] = [
         ]
     },
     {
+        label: 'HR Management', icon: Briefcase,
+        children: [
+            { label: 'Teacher Attendance', path: '/hr/attendance' },
+            { label: 'Leave Management', path: '/hr/leaves' },
+            { label: 'Payroll & Salary', path: '/hr/payroll' },
+            { label: 'Performance', path: '/hr/performance' },
+            { label: 'Contracts & Docs', path: '/hr/contracts' },
+        ]
+    },
+    {
         label: 'Academic', icon: BookOpen,
         children: [
             { label: 'Classes & Sections', path: '/academic/classes' },
@@ -39,18 +51,21 @@ const navItems: NavItem[] = [
         ]
     },
     {
+        label: 'Examination', icon: BookOpen,
+        children: [
+            { label: 'Exam Setup', path: '/exams' },
+            { label: 'Exam Schedule', path: '/exams/schedule' },
+            { label: 'Result Publication', path: '/exams/results' },
+            { label: 'Report Cards', path: '/exams/reports' },
+        ]
+    },
+    {
         label: 'Finance', icon: DollarSign,
         children: [
             { label: 'Fee Structure', path: '/finance/structure' },
             { label: 'Fee Payment', path: '/finance/payment' },
             { label: 'Pending Fees', path: '/finance/pending' },
-        ]
-    },
-    {
-        label: 'Attendance', icon: CalendarCheck,
-        children: [
-            { label: 'Mark Attendance', path: '/attendance/mark' },
-            { label: 'Analytics', path: '/attendance/analytics' },
+            { label: 'Record Payment', path: '/finance/new' },
         ]
     },
     {
@@ -71,6 +86,30 @@ const navItems: NavItem[] = [
     { label: 'Settings', icon: Settings, path: '/settings' },
 ];
 
+const teacherNavItems: NavItem[] = [
+    { label: 'Dashboard', icon: LayoutDashboard, path: '/teacher' },
+    {
+        label: 'Examination', icon: BookOpen,
+        children: [
+            { label: 'Marks Entry', path: '/teacher/exams/marks' },
+        ]
+    },
+    {
+        label: 'Attendance', icon: Users,
+        children: [
+            { label: 'Mark Attendance', path: '/attendance/mark' },
+            { label: 'Attendance Analytics', path: '/attendance/analytics' },
+        ]
+    },
+    {
+        label: 'Communication', icon: MessageSquare,
+        children: [
+            { label: 'Announcements', path: '/teacher/announcements' },
+        ]
+    },
+    { label: 'Settings', icon: Settings, path: '/settings' },
+];
+
 interface SidebarProps {
     collapsed: boolean;
     onToggle: () => void;
@@ -80,7 +119,22 @@ interface SidebarProps {
 
 export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
     const location = useLocation();
-    const [openMenus, setOpenMenus] = useState<string[]>(['Students', 'Finance']);
+
+    const getRole = (): UserRole => {
+        const raw = localStorage.getItem('currentUser');
+        if (!raw) return 'admin';
+
+        try {
+            const parsed = JSON.parse(raw) as { role?: UserRole };
+            return parsed.role || 'admin';
+        } catch {
+            return 'admin';
+        }
+    };
+
+    const role = getRole();
+    const navItems = role === 'teacher' ? teacherNavItems : adminNavItems;
+    const [openMenus, setOpenMenus] = useState<string[]>(role === 'teacher' ? ['Examination'] : ['HR Management']);
 
     const toggleMenu = (label: string) => {
         setOpenMenus(prev =>
@@ -101,7 +155,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
                 {!collapsed && (
                     <div>
                         <div className="text-sm font-bold text-white leading-tight">EduCampus</div>
-                        <div className="text-[10px] text-violet-400 font-medium">Admin Portal</div>
+                        <div className="text-[10px] text-violet-400 font-medium">{role === 'teacher' ? 'Teacher Portal' : 'Admin Portal'}</div>
                     </div>
                 )}
                 <button

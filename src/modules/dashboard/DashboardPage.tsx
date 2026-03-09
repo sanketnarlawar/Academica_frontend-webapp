@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Users, GraduationCap, BookOpen, DollarSign, AlertTriangle, Info, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { KPICard } from '../../components/ui/KPICard';
 import { FeeCollectionChart, AttendanceTrendChart, ClassAttendanceChart } from '../../components/charts/Charts';
@@ -34,6 +35,7 @@ function AlertCard({ alert }: { alert: Alert }) {
 }
 
 export default function DashboardPage() {
+    const navigate = useNavigate();
     const [dashboardData, setDashboardData] = useState<DashboardOverview | null>(null);
     const [trends, setTrends] = useState<DashboardTrends | null>(null);
     const [loading, setLoading] = useState(true);
@@ -75,6 +77,7 @@ export default function DashboardPage() {
             changeType: 'up' as const,
             icon: <Users className="w-5 h-5 text-violet-400" />,
             gradient: 'bg-violet-500/10',
+            onClick: () => navigate('/students'),
         },
         {
             title: 'Total Teachers',
@@ -83,6 +86,7 @@ export default function DashboardPage() {
             changeType: 'up' as const,
             icon: <GraduationCap className="w-5 h-5 text-blue-400" />,
             gradient: 'bg-blue-500/10',
+            onClick: () => navigate('/teachers'),
         },
         {
             title: 'Total Classes',
@@ -91,6 +95,7 @@ export default function DashboardPage() {
             changeType: 'up' as const,
             icon: <BookOpen className="w-5 h-5 text-emerald-400" />,
             gradient: 'bg-emerald-500/10',
+            onClick: () => navigate('/academic/classes'),
         },
         {
             title: 'Fees Collected',
@@ -100,6 +105,7 @@ export default function DashboardPage() {
             icon: <DollarSign className="w-5 h-5 text-amber-400" />,
             gradient: 'bg-amber-500/10',
             suffix: '₹',
+            onClick: () => navigate('/finance/payment'),
         },
         {
             title: 'Pending Fees',
@@ -109,6 +115,7 @@ export default function DashboardPage() {
             icon: <AlertTriangle className="w-5 h-5 text-red-400" />,
             gradient: 'bg-red-500/10',
             suffix: '₹',
+            onClick: () => navigate('/finance/pending'),
         },
     ];
 

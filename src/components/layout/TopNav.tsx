@@ -2,26 +2,116 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Search, Bell, ChevronDown, User, Settings, LogOut, Menu } from 'lucide-react';
 import { firebaseAuthService } from '../../services/firebaseAuthService';
+import { firebaseAnnouncementService } from '../../services/firebaseAnnouncementService';
+import type { Announcement } from '../../types';
 
 interface TopNavProps {
     sidebarCollapsed: boolean;
     onMobileMenuOpen: () => void;
 }
 
-const notifications = [
-    { id: 1, text: '12 students have low attendance', time: '2h ago', type: 'warning' },
-    { id: 2, text: 'New admission application received', time: '4h ago', type: 'info' },
-    { id: 3, text: 'Fee payment of ₹19,000 confirmed', time: '6h ago', type: 'success' },
-    { id: 4, text: 'Staff meeting tomorrow at 3 PM', time: '1d ago', type: 'info' },
-];
+interface CurrentUser {
+    uid?: string;
+    email?: string;
+    role?: string;
+    name?: string;
+}
 
 export default function TopNav({ sidebarCollapsed, onMobileMenuOpen }: TopNavProps) {
     const navigate = useNavigate();
     const [profileOpen, setProfileOpen] = useState(false);
     const [notifOpen, setNotifOpen] = useState(false);
     const [searchFocused, setSearchFocused] = useState(false);
+    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [hasNewNotifications, setHasNewNotifications] = useState(false);
+    const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
     const profileRef = useRef<HTMLDivElement>(null);
     const notifRef = useRef<HTMLDivElement>(null);
+
+    const processAnnouncements = (data: Announcement[]) => {
+        // Take latest 5 for display
+        const latest = data.slice(0, 5);
+        setAnnouncements(latest);
+
+        // Check for new announcements
+        const lastSeenStr = localStorage.getItem('lastSeenAnnouncementTime');
+        // If never seen before, default to 1 minute ago (so only brand new ones show)
+        const lastSeen = lastSeenStr ? new Date(lastSeenStr).getTime() : Date.now() - 60000;
+        
+        console.log('🔔 Checking announcements:', {
+            totalAnnouncements: data.length,
+            lastSeenStr,
+            lastSeen: new Date(lastSeen).toISOString(),
+        });
+
+        const newCount = data.filter(ann => {
+            // Get timestamp from createdAt or date field
+            const annData = ann as any;
+            let annTime: number;
+            
+            // Priority 1: Use createdAt Timestamp field
+            if (annData.createdAt) {
+                if (typeof annData.createdAt.toMillis === 'function') {
+                    annTime = annData.createdAt.toMillis();
+                } else if (annData.createdAt.seconds) {
+                    annTime = annData.createdAt.seconds * 1000;
+                } else {
+                    annTime = Date.now();
+                }
+            }
+            // Priority 2: Use date field
+            else if (typeof ann.date === 'string') {
+                annTime = new Date(ann.date).getTime();
+            } else if (annData.date?.seconds) {
+                annTime = annData.date.seconds * 1000;
+            } else {
+                annTime = Date.now();
+            }
+            
+            const isNew = annTime > lastSeen;
+            console.log(`  📄 ${ann.title?.substring(0, 30) || 'Untitled'}...`, {
+                annTime: new Date(annTime).toISOString(),
+                isNew,
+            });
+            
+            return isNew;
+        }).length;
+
+        console.log('🔔 Unread count:', newCount);
+        
+        setUnreadCount(newCount);
+        if (newCount > 0) {
+            console.log('🔔 Triggering badge and shake animation');
+            setHasNewNotifications(true);
+            // Remove shake after 3 seconds
+            setTimeout(() => {
+                console.log('🔔 Removing shake animation');
+                setHasNewNotifications(false);
+            }, 3000);
+        } else {
+            console.log('🔔 No unread notifications');
+        }
+    };
+
+    useEffect(() => {
+        // Subscribe to real-time announcements
+        const unsubscribe = firebaseAnnouncementService.subscribeToAnnouncements(processAnnouncements);
+        return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
+        // Load current user from localStorage
+        const userStr = localStorage.getItem('currentUser');
+        if (userStr) {
+            try {
+                const user = JSON.parse(userStr) as CurrentUser;
+                setCurrentUser(user);
+            } catch (error) {
+                console.error('Error parsing current user:', error);
+            }
+        }
+    }, []);
 
     const handleLogout = async () => {
         try {
@@ -41,6 +131,64 @@ export default function TopNav({ sidebarCollapsed, onMobileMenuOpen }: TopNavPro
         document.addEventListener('mousedown', handler);
         return () => document.removeEventListener('mousedown', handler);
     }, []);
+
+    const handleNotificationClick = () => {
+        setNotifOpen(!notifOpen);
+        setProfileOpen(false);
+        // Mark all as seen when opening dropdown
+        if (!notifOpen) {
+            localStorage.setItem('lastSeenAnnouncementTime', new Date().toISOString());
+            setUnreadCount(0);
+            setHasNewNotifications(false);
+        }
+    };
+
+    const handleViewAllNotifications = () => {
+        navigate('/communication/announcements');
+        setNotifOpen(false);
+    };
+
+    const getTimeAgo = (dateStr: string): string => {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        return `${diffDays}d ago`;
+    };
+
+    const getPriorityColor = (priority: string): string => {
+        switch (priority) {
+            case 'high': return 'bg-red-500';
+            case 'medium': return 'bg-amber-400';
+            case 'low': return 'bg-emerald-400';
+            default: return 'bg-blue-400';
+        }
+    };
+
+    const getInitials = (name?: string): string => {
+        if (!name) return 'U';
+        return name
+            .split(' ')
+            .map(n => n[0])
+            .join('')
+            .toUpperCase()
+            .slice(0, 2);
+    };
+
+    const getRoleLabel = (role?: string): string => {
+        if (!role) return 'User';
+        switch (role.toLowerCase()) {
+            case 'admin': return 'Admin';
+            case 'teacher': return 'Teacher';
+            case 'student': return 'Student';
+            default: return 'User';
+        }
+    };
 
     const marginLeft = `${sidebarCollapsed ? 72 : 260}px`;
 
@@ -73,11 +221,15 @@ export default function TopNav({ sidebarCollapsed, onMobileMenuOpen }: TopNavPro
                 {/* Notifications */}
                 <div ref={notifRef} className="relative">
                     <button
-                        onClick={() => { setNotifOpen(!notifOpen); setProfileOpen(false); }}
+                        onClick={handleNotificationClick}
                         className="relative p-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/8 transition-all"
                     >
-                        <Bell className="w-5 h-5" />
-                        <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                        <Bell className={`w-5 h-5 ${hasNewNotifications ? 'animate-bell-shake' : ''}`} />
+                        {unreadCount > 0 && (
+                            <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-red-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center">
+                                {unreadCount > 9 ? '9+' : unreadCount}
+                            </span>
+                        )}
                     </button>
 
                     {notifOpen && (
@@ -87,22 +239,33 @@ export default function TopNav({ sidebarCollapsed, onMobileMenuOpen }: TopNavPro
                                 <span className="text-xs text-violet-400 cursor-pointer hover:underline">Mark all read</span>
                             </div>
                             <div className="max-h-72 overflow-y-auto">
-                                {notifications.map(n => (
-                                    <div key={n.id} className="px-4 py-3 border-b border-white/5 hover:bg-white/4 transition-colors cursor-pointer">
-                                        <div className="flex gap-3">
-                                            <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.type === 'warning' ? 'bg-amber-400' :
-                                                    n.type === 'success' ? 'bg-emerald-400' : 'bg-blue-400'
-                                                }`} />
-                                            <div>
-                                                <p className="text-xs text-slate-300 leading-relaxed">{n.text}</p>
-                                                <p className="text-[10px] text-slate-500 mt-0.5">{n.time}</p>
+                                {announcements.length === 0 ? (
+                                    <div className="px-4 py-8 text-center">
+                                        <p className="text-xs text-slate-500">No announcements yet</p>
+                                    </div>
+                                ) : (
+                                    announcements.map(ann => (
+                                        <div key={ann.id} className="px-4 py-3 border-b border-white/5 hover:bg-white/4 transition-colors cursor-pointer">
+                                            <div className="flex gap-3">
+                                                <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${getPriorityColor(ann.priority)}`} />
+                                                <div className="flex-1">
+                                                    <p className="text-xs font-medium text-white mb-0.5">{ann.title}</p>
+                                                    <p className="text-[11px] text-slate-400 line-clamp-2">{ann.content}</p>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className="text-[10px] text-slate-500">{getTimeAgo(ann.date)}</span>
+                                                        <span className="text-[10px] text-violet-400">• {ann.target}</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))
+                                )}
                             </div>
                             <div className="px-4 py-2.5">
-                                <button className="w-full text-xs text-violet-400 hover:text-violet-300 text-center transition-colors">
+                                <button 
+                                    onClick={handleViewAllNotifications}
+                                    className="w-full text-xs text-violet-400 hover:text-violet-300 text-center transition-colors"
+                                >
                                     View all notifications
                                 </button>
                             </div>
@@ -117,11 +280,11 @@ export default function TopNav({ sidebarCollapsed, onMobileMenuOpen }: TopNavPro
                         className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/8 transition-all"
                     >
                         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold">
-                            A
+                            {getInitials(currentUser?.name)}
                         </div>
                         <div className="hidden sm:block text-left">
-                            <div className="text-xs font-semibold text-white">Admin User</div>
-                            <div className="text-[10px] text-slate-500">Super Admin</div>
+                            <div className="text-xs font-semibold text-white">{currentUser?.name || 'User'}</div>
+                            <div className="text-[10px] text-slate-500">{getRoleLabel(currentUser?.role)}</div>
                         </div>
                         <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
                     </button>
@@ -129,8 +292,8 @@ export default function TopNav({ sidebarCollapsed, onMobileMenuOpen }: TopNavPro
                     {profileOpen && (
                         <div className="absolute right-0 top-full mt-2 w-52 bg-[#141624] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden z-50">
                             <div className="px-4 py-3 border-b border-white/8">
-                                <div className="text-sm font-semibold text-white">Admin User</div>
-                                <div className="text-xs text-slate-400">admin@educampus.edu</div>
+                                <div className="text-sm font-semibold text-white">{currentUser?.name || 'User'}</div>
+                                <div className="text-xs text-slate-400">{currentUser?.email || 'No email'}</div>
                             </div>
                             {[
                                 { icon: User, label: 'Profile', path: '/profile' },

@@ -4,6 +4,7 @@ import { Check, ChevronRight } from 'lucide-react';
 import { firebaseTeacherService } from '../../services/firebaseTeacherService';
 import { firebaseClassService } from '../../services/firebaseClassService';
 import { firebaseSubjectService } from '../../services/firebaseSubjectService';
+import { firebaseAuthService } from '../../services/firebaseAuthService';
 import type { ClassSection, Gender, Subject } from '../../types';
 
 export default function NewTeacherPage() {
@@ -14,6 +15,7 @@ export default function NewTeacherPage() {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [createdEmployeeId, setCreatedEmployeeId] = useState('');
+    const [provisionedPassword, setProvisionedPassword] = useState('');
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -80,6 +82,19 @@ export default function NewTeacherPage() {
             const subjects = formData.selectedSubjects;
             const classes = formData.classSection ? [formData.classSection] : [];
 
+            const provisionResult = await firebaseAuthService.provisionUserFromAdmin({
+                email: formData.email,
+                name: formData.name,
+                role: 'teacher',
+                linkedEntityId: employeeId,
+                linkedEntityType: 'teacher',
+            });
+
+            if (!provisionResult.success) {
+                setError(provisionResult.message || 'Unable to create login account for this teacher.');
+                return;
+            }
+
             await firebaseTeacherService.addTeacher({
                 employeeId,
                 name: formData.name,
@@ -98,6 +113,7 @@ export default function NewTeacherPage() {
             });
 
             setCreatedEmployeeId(employeeId);
+            setProvisionedPassword(provisionResult.tempPassword || 'Welcome@123');
             setSubmitted(true);
         } catch (err) {
             console.error('Error adding teacher:', err);
@@ -118,6 +134,10 @@ export default function NewTeacherPage() {
                     <p className="text-slate-400 mt-2">
                         Teacher profile has been saved successfully.<br />
                         Employee ID: <span className="text-indigo-400 font-mono">{createdEmployeeId}</span>
+                    </p>
+                    <p className="text-slate-300 mt-3 text-sm">
+                        Login created with temporary password: <span className="text-amber-300 font-mono">{provisionedPassword}</span><br />
+                        Password reset email has been sent to teacher email.
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
