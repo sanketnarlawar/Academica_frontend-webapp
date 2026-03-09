@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { School, Mail, Lock, Eye, EyeOff } from 'lucide-react';
-import { authService } from '../../services/authService';
+import { firebaseAuthService } from '../../services/firebaseAuthService';
 
 export default function LoginPage() {
     const navigate = useNavigate();
@@ -24,18 +24,19 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            console.log('Attempting login with:', { email, password: '***' });
-            const response = await authService.login({ email, password });
-            console.log('Login response:', response);
-            
-            if (response.success) {
+            // Firebase Auth login
+            const result = await firebaseAuthService.login(email, password);
+
+            if (result.success) {
+                // Store user info locally for quick access
+                localStorage.setItem('currentUser', JSON.stringify(result.user));
                 navigate('/');
             } else {
-                setError(response.message || 'Login failed');
+                setError(result.message || 'Login failed');
             }
-        } catch (err: unknown) {
+        } catch (err) {
             console.error('Login error:', err);
-            setError((err as { response?: { data?: { message?: string } } }).response?.data?.message || 'Login failed. Please try again.');
+            setError('Login failed. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -110,7 +111,16 @@ export default function LoginPage() {
                         </button>
                     </form>
 
-                    <div className="mt-6 pt-6 border-t border-white/10 text-center">
+                    <div className="mt-6 text-center">
+                        <p className="text-sm text-slate-400">
+                            Don't have an account?{' '}
+                            <Link to="/signup" className="text-violet-400 hover:text-violet-300 font-medium transition-colors">
+                                Sign Up
+                            </Link>
+                        </p>
+                    </div>
+
+                    <div className="mt-4 pt-6 border-t border-white/10 text-center">
                         <p className="text-xs text-slate-500">Default credentials</p>
                         <p className="text-xs text-slate-400 mt-1">Email: admin@schoolerp.com</p>
                         <p className="text-xs text-slate-400">Password: admin123</p>

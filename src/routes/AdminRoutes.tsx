@@ -4,6 +4,7 @@ import DashboardPage from '../modules/dashboard/DashboardPage';
 import StudentsPage from '../modules/students/StudentsPage';
 import NewAdmissionPage from '../modules/students/NewAdmissionPage';
 import TeachersPage from '../modules/teachers/TeachersPage';
+import NewTeacherPage from '../modules/teachers/NewTeacherPage';
 import AcademicsPage from '../modules/academics/AcademicsPage';
 import FinancePage from '../modules/finance/FinancePage';
 import AttendancePage from '../modules/attendance/AttendancePage';
@@ -12,10 +13,12 @@ import ReportsPage from '../modules/reports/ReportsPage';
 import AIInsightsPage from '../modules/ai/AIInsightsPage';
 import SettingsPage from '../modules/settings/SettingsPage';
 import LoginPage from '../modules/auth/LoginPage';
+import SignupPage from '../modules/auth/SignupPage';
+import ProfilePage from '../modules/profile/ProfilePage';
 
 // Check if user is authenticated
 function isAuthenticated() {
-    return !!localStorage.getItem('token');
+    return !!localStorage.getItem('currentUser');
 }
 
 // Protected Route Component
@@ -38,6 +41,7 @@ export default function AdminRoutes() {
         <BrowserRouter>
             <Routes>
                 <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignupPage />} />
                 
                 <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
                     <Route path="/" element={<DashboardPage />} />
@@ -48,7 +52,7 @@ export default function AdminRoutes() {
 
                     {/* Teachers */}
                     <Route path="/teachers" element={<TeachersPage />} />
-                    <Route path="/teachers/new" element={<TeachersPage />} />
+                    <Route path="/teachers/new" element={<NewTeacherPage />} />
 
                     {/* Academic */}
                     <Route path="/academic/classes" element={<AcademicsPage />} />
@@ -74,6 +78,9 @@ export default function AdminRoutes() {
 
                     {/* AI & Settings */}
                     <Route path="/ai-insights" element={<AIInsightsPage />} />
+                    
+                    {/* Profile & Settings */}
+                    <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/settings" element={<SettingsPage />} />
 
                     <Route path="*" element={<NotFound />} />
