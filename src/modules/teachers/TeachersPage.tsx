@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, Edit, Plus, Trash2 } from 'lucide-react';
 import DataTable from '../../components/tables/DataTable';
 import { firebaseTeacherService } from '../../services/firebaseTeacherService';
-import type { Teacher } from '../../types';
+import { firebaseClassService } from '../../services/firebaseClassService';
+import { firebaseSubjectService } from '../../services/firebaseSubjectService';
+import type { Teacher, ClassSection, Subject } from '../../types';
 
 const columns = [
     {
@@ -59,6 +61,8 @@ export default function TeachersPage() {
     const [viewOpen, setViewOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [classSections, setClassSections] = useState<ClassSection[]>([]);
+    const [subjects, setSubjects] = useState<Subject[]>([]);
     const [editForm, setEditForm] = useState({
         employeeId: '',
         name: '',
@@ -69,8 +73,8 @@ export default function TeachersPage() {
         department: '',
         qualification: '',
         experience: '',
-        subjectsText: '',
-        classesText: '',
+        selectedSubjects: [] as string[],
+        selectedClasses: [] as string[],
         joinDate: '',
         salary: '',
         status: 'active',
@@ -84,7 +88,29 @@ export default function TeachersPage() {
     useEffect(() => {
         fetchTeachers();
         fetchStats();
+        loadClassSections();
+        loadSubjects();
     }, []);
+
+    const loadClassSections = async () => {
+        try {
+            const data = await firebaseClassService.getClasses();
+            setClassSections(data);
+        } catch (err) {
+            console.error('Error loading class sections:', err);
+            setClassSections([]);
+        }
+    };
+
+    const loadSubjects = async () => {
+        try {
+            const data = await firebaseSubjectService.getSubjects();
+            setSubjects(data);
+        } catch (err) {
+            console.error('Error loading subjects:', err);
+            setSubjects([]);
+        }
+    };
 
     const fetchTeachers = async () => {
         try {
@@ -143,8 +169,8 @@ export default function TeachersPage() {
             department: row.department,
             qualification: row.qualification,
             experience: String(row.experience),
-            subjectsText: row.subjects.join(', '),
-            classesText: row.classes.join(', '),
+            selectedSubjects: row.subjects || [],
+            selectedClasses: row.classes || [],
             joinDate: row.joinDate,
             salary: String(row.salary),
             status: row.status,
@@ -162,8 +188,6 @@ export default function TeachersPage() {
         setSaving(true);
         try {
             const experience = Number(editForm.experience || 0);
-            const subjects = editForm.subjectsText.split(',').map((s) => s.trim()).filter(Boolean);
-            const classes = editForm.classesText.split(',').map((c) => c.trim()).filter(Boolean);
             const salary = Number(editForm.salary || 0);
             await firebaseTeacherService.updateTeacher(selectedTeacher.id, {
                 employeeId: editForm.employeeId,
@@ -175,8 +199,8 @@ export default function TeachersPage() {
                 department: editForm.department,
                 qualification: editForm.qualification,
                 experience,
-                subjects,
-                classes,
+                subjects: editForm.selectedSubjects,
+                classes: editForm.selectedClasses,
                 joinDate: editForm.joinDate,
                 salary,
                 status: editForm.status as 'active' | 'inactive',
@@ -305,8 +329,69 @@ export default function TeachersPage() {
                                 <option value="active">Active</option>
                                 <option value="inactive">Inactive</option>
                             </select>
-                            <input className="input-field bg-white/5 border-white/15 sm:col-span-2" value={editForm.subjectsText} onChange={(e) => setEditForm((p) => ({ ...p, subjectsText: e.target.value }))} placeholder="Subjects (comma separated)" />
-                            <input className="input-field bg-white/5 border-white/15 sm:col-span-2" value={editForm.classesText} onChange={(e) => setEditForm((p) => ({ ...p, classesText: e.target.value }))} placeholder="Classes (comma separated)" />
+                            
+                            <div className="sm:col-span-2">
+                                <label className="block text-xs font-medium text-slate-400 mb-2">Subjects</label>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {editForm.selectedSubjects.map((subject, idx) => (
+                                        <span key={idx} className="badge badge-blue text-xs flex items-center gap-1">
+                                            {subject}
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditForm((p) => ({ ...p, selectedSubjects: p.selectedSubjects.filter((_, i) => i !== idx) }))}
+                                                className="ml-1 hover:text-red-300"
+                                            >×</button>
+                                        </span>
+                                    ))}
+                                </div>
+                                <select
+                                    className="select-field bg-white/5 border-white/15"
+                                    value=""
+                                    onChange={(e) => {
+                                        if (e.target.value && !editForm.selectedSubjects.includes(e.target.value)) {
+                                            setEditForm((p) => ({ ...p, selectedSubjects: [...p.selectedSubjects, e.target.value] }));
+                                        }
+                                    }}
+                                >
+                                    <option value="">Add Subject</option>
+                                    {subjects.map((subject) => (
+                                        <option key={subject.id} value={subject.name}>{subject.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="sm:col-span-2">
+                                <label className="block text-xs font-medium text-slate-400 mb-2">Classes</label>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {editForm.selectedClasses.map((cls, idx) => (
+                                        <span key={idx} className="badge badge-purple text-xs flex items-center gap-1">
+                                            {cls}
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditForm((p) => ({ ...p, selectedClasses: p.selectedClasses.filter((_, i) => i !== idx) }))}
+                                                className="ml-1 hover:text-red-300"
+                                            >×</button>
+                                        </span>
+                                    ))}
+                                </div>
+                                <select
+                                    className="select-field bg-white/5 border-white/15"
+                                    value=""
+                                    onChange={(e) => {
+                                        if (e.target.value && !editForm.selectedClasses.includes(e.target.value)) {
+                                            setEditForm((p) => ({ ...p, selectedClasses: [...p.selectedClasses, e.target.value] }));
+                                        }
+                                    }}
+                                >
+                                    <option value="">Add Class</option>
+                                    {classSections.map((cs) => (
+                                        <option key={cs.id} value={`${cs.name}-${cs.section}`}>
+                                            Class {cs.name}-{cs.section}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
                             <input type="date" disabled className="input-field opacity-60 cursor-not-allowed" value={editForm.joinDate} onChange={(e) => setEditForm((p) => ({ ...p, joinDate: e.target.value }))} placeholder="Join Date" />
                             <input type="number" className="input-field bg-white/5 border-white/15" value={editForm.salary} onChange={(e) => setEditForm((p) => ({ ...p, salary: e.target.value }))} placeholder="Salary" />
                         </div>

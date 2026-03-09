@@ -15,6 +15,12 @@ export default function SignupPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    const resolveDefaultPath = (role?: string) => {
+        if (role === 'teacher') return '/teacher';
+        if (role === 'student') return '/login';
+        return '/';
+    };
+
     const handleSignup = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
@@ -43,9 +49,15 @@ export default function SignupPage() {
             );
 
             if (result.success) {
-                // Auto-login after signup
-                localStorage.setItem('currentUser', JSON.stringify(result.user));
-                navigate('/');
+                // Auto-login after signup to store normalized user payload including role.
+                const loginResult = await firebaseAuthService.login(formData.email, formData.password);
+
+                if (loginResult.success) {
+                    localStorage.setItem('currentUser', JSON.stringify(loginResult.user));
+                    navigate(resolveDefaultPath(loginResult.user?.role), { replace: true });
+                } else {
+                    setError(loginResult.message || 'Signup succeeded but auto-login failed. Please login manually.');
+                }
             } else {
                 setError(result.message || 'Signup failed');
             }

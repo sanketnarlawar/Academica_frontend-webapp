@@ -11,6 +11,12 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    const resolveDefaultPath = (role?: string) => {
+        if (role === 'teacher') return '/teacher';
+        if (role === 'student') return '/login';
+        return '/';
+    };
+
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
@@ -30,7 +36,7 @@ export default function LoginPage() {
             if (result.success) {
                 // Store user info locally for quick access
                 localStorage.setItem('currentUser', JSON.stringify(result.user));
-                navigate('/');
+                navigate(resolveDefaultPath(result.user?.role), { replace: true });
             } else {
                 setError(result.message || 'Login failed');
             }
@@ -51,7 +57,7 @@ export default function LoginPage() {
                         <School className="w-8 h-8 text-white" />
                     </div>
                     <h1 className="text-2xl font-bold text-white mb-1">EduCampus</h1>
-                    <p className="text-sm text-slate-400">Admin Portal</p>
+                    <p className="text-sm text-slate-400">Role Based Portal</p>
                 </div>
 
                 {/* Login Card */}

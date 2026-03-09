@@ -3,15 +3,20 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  sendPasswordResetEmail,
+  getAuth,
   type User,
 } from 'firebase/auth';
-import { auth, db } from '../config/firebase';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { auth, db, firebaseConfig } from '../config/firebase';
+import { doc, setDoc, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
 
 interface UserRegistrationData {
   name: string;
   role: string;
 }
+
+const DEFAULT_TEMP_PASSWORD = 'Welcome@123';
 
 export const firebaseAuthService = {
   /**
@@ -60,6 +65,8 @@ export const firebaseAuthService = {
           email: user.email,
           role: userData?.role || 'student',
           name: userData?.name || user.email,
+          linkedEntityId: userData?.linkedEntityId || '',
+          linkedEntityType: userData?.linkedEntityType || '',
         },
       };
     } catch (error) {
@@ -119,6 +126,74 @@ export const firebaseAuthService = {
     } catch (error) {
       console.error('Error getting user role:', error);
       return null;
+    }
+  },
+
+  /**
+   * Provision a user account from admin flows (teacher/student onboarding)
+   * - Creates Firebase Auth user with fixed temporary password
+   * - Creates /users profile document for role-based login
+   * - Triggers Firebase password reset email so user can set own password
+   */
+  provisionUserFromAdmin: async (payload: {
+    email: string;
+    name: string;
+    role: 'teacher' | 'student';
+    linkedEntityId: string;
+    linkedEntityType: 'teacher' | 'student';
+  }): Promise<{ success: boolean; message?: string; uid?: string; tempPassword?: string }> => {
+    const { email, name, role, linkedEntityId, linkedEntityType } = payload;
+
+    try {
+      const duplicate = await getDocs(query(collection(db, 'users'), where('email', '==', email)));
+      if (!duplicate.empty) {
+        return {
+          success: false,
+          message: 'This email already has a login account. Please use a different email.',
+        };
+      }
+
+      // Use a secondary Firebase app to avoid switching current admin session.
+      const secondaryApp = initializeApp(firebaseConfig, `provision-${Date.now()}`);
+      const secondaryAuth = getAuth(secondaryApp);
+
+      try {
+        const credential = await createUserWithEmailAndPassword(secondaryAuth, email, DEFAULT_TEMP_PASSWORD);
+        const provisionedUser = credential.user;
+
+        await setDoc(doc(db, 'users', provisionedUser.uid), {
+          uid: provisionedUser.uid,
+          email,
+          role,
+          name,
+          linkedEntityId,
+          linkedEntityType,
+          mustResetPassword: true,
+          tempPasswordAssignedAt: new Date(),
+          createdAt: new Date(),
+        });
+
+        // Trigger reset email so user sets private password.
+        await sendPasswordResetEmail(secondaryAuth, email);
+
+        await signOut(secondaryAuth);
+        await deleteApp(secondaryApp);
+
+        return {
+          success: true,
+          uid: provisionedUser.uid,
+          tempPassword: DEFAULT_TEMP_PASSWORD,
+        };
+      } catch (provisionError) {
+        await deleteApp(secondaryApp);
+        throw provisionError;
+      }
+    } catch (error) {
+      console.error('Error provisioning user from admin:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to create login account',
+      };
     }
   },
 };

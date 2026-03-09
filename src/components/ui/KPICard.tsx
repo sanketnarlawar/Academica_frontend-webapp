@@ -9,11 +9,27 @@ interface KPICardProps {
     icon: ReactNode;
     gradient: string;
     suffix?: string;
+    onClick?: () => void;
 }
 
-export function KPICard({ title, value, change, changeType, icon, gradient, suffix }: KPICardProps) {
+export function KPICard({ title, value, change, changeType, icon, gradient, suffix, onClick }: KPICardProps) {
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (!onClick) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onClick();
+        }
+    };
+
     return (
-        <div className="kpi-card group cursor-default">
+        <div
+            className={`kpi-card group ${onClick ? 'cursor-pointer hover:-translate-y-0.5 transition-transform duration-200' : 'cursor-default'}`}
+            onClick={onClick}
+            onKeyDown={handleKeyDown}
+            role={onClick ? 'button' : undefined}
+            tabIndex={onClick ? 0 : undefined}
+            aria-label={onClick ? `Open ${title}` : undefined}
+        >
             {/* Background glow */}
             <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl ${gradient}`} style={{ filter: 'blur(20px)', zIndex: -1 }} />
 

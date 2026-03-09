@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Upload, Check } from 'lucide-react';
 import { firebaseStudentService } from '../../services/firebaseStudentService';
 import { firebaseClassService } from '../../services/firebaseClassService';
+import { firebaseAuthService } from '../../services/firebaseAuthService';
 import type { ClassSection, Gender } from '../../types';
 
 const sections = ['Personal Information', 'Academic Details', 'Parent / Guardian', 'Documents'];
@@ -15,6 +16,7 @@ export default function NewAdmissionPage() {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [createdRollNo, setCreatedRollNo] = useState('');
+    const [provisionedPassword, setProvisionedPassword] = useState('');
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -69,6 +71,19 @@ export default function NewAdmissionPage() {
             const rollNo = `S${String(count + 1).padStart(3, '0')}`;
             const fullName = `${formData.firstName} ${formData.lastName}`.trim();
 
+            const provisionResult = await firebaseAuthService.provisionUserFromAdmin({
+                email: formData.email,
+                name: fullName,
+                role: 'student',
+                linkedEntityId: rollNo,
+                linkedEntityType: 'student',
+            });
+
+            if (!provisionResult.success) {
+                setError(provisionResult.message || 'Unable to create login account for this student.');
+                return;
+            }
+
             await firebaseStudentService.addStudent({
                 rollNo,
                 name: fullName,
@@ -88,6 +103,7 @@ export default function NewAdmissionPage() {
             });
 
             setCreatedRollNo(rollNo);
+            setProvisionedPassword(provisionResult.tempPassword || 'Welcome@123');
             setSubmitted(true);
         } catch (err) {
             console.error('Error submitting admission:', err);
@@ -106,6 +122,10 @@ export default function NewAdmissionPage() {
                 <div className="text-center">
                     <h2 className="text-2xl font-bold text-white">Admission Submitted!</h2>
                     <p className="text-slate-400 mt-2">The admission form has been submitted successfully.<br />Roll No: <span className="text-violet-400 font-mono">{createdRollNo}</span></p>
+                    <p className="text-slate-300 mt-3 text-sm">
+                        Student login created with temporary password: <span className="text-amber-300 font-mono">{provisionedPassword}</span><br />
+                        Password reset email has been sent to student email.
+                    </p>
                 </div>
                 <div className="flex items-center gap-3">
                     <button className="btn-secondary" onClick={() => navigate('/students')}>

@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, Edit, Trash2, Plus, Filter } from 'lucide-react';
 import DataTable from '../../components/tables/DataTable';
 import { firebaseStudentService } from '../../services/firebaseStudentService';
-import type { Student } from '../../types';
+import { firebaseClassService } from '../../services/firebaseClassService';
+import type { Student, ClassSection } from '../../types';
 
 const statusBadge = {
     active: 'badge-green',
@@ -82,6 +83,7 @@ export default function StudentsPage() {
         feeStatus: 'pending',
     });
     const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1, totalItems: 0 });
+    const [classSections, setClassSections] = useState<ClassSection[]>([]);
 
     const fetchStudents = useCallback(async (page: number = 1) => {
         try {
@@ -108,8 +110,19 @@ export default function StudentsPage() {
         }
     }, [filter]);
 
+    const loadClassSections = async () => {
+        try {
+            const data = await firebaseClassService.getClasses();
+            setClassSections(data);
+        } catch (err) {
+            console.error('Error loading class sections:', err);
+            setClassSections([]);
+        }
+    };
+
     useEffect(() => {
         fetchStudents();
+        loadClassSections();
     }, [fetchStudents]);
 
     if (loading) {
@@ -119,6 +132,11 @@ export default function StudentsPage() {
             </div>
         );
     }
+
+    const availableClasses = Array.from(new Set(classSections.map((cs) => cs.name))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const availableSections = classSections
+        .filter((cs) => cs.name === editForm.class)
+        .map((cs) => cs.section);
 
     const filtered = students;
 
@@ -311,8 +329,14 @@ export default function StudentsPage() {
                             <input type="date" className="input-field bg-white/5 border-white/15" value={editForm.dob} onChange={(e) => setEditForm((p) => ({ ...p, dob: e.target.value }))} placeholder="DOB" />
                             <input className="input-field bg-white/5 border-white/15" value={editForm.parentName} onChange={(e) => setEditForm((p) => ({ ...p, parentName: e.target.value }))} placeholder="Parent Name" />
                             <input className="input-field bg-white/5 border-white/15" value={editForm.parentPhone} onChange={(e) => setEditForm((p) => ({ ...p, parentPhone: e.target.value }))} placeholder="Parent Phone" />
-                            <input className="input-field bg-white/5 border-white/15" value={editForm.class} onChange={(e) => setEditForm((p) => ({ ...p, class: e.target.value }))} placeholder="Class" />
-                            <input className="input-field bg-white/5 border-white/15" value={editForm.section} onChange={(e) => setEditForm((p) => ({ ...p, section: e.target.value }))} placeholder="Section" />
+                            <select className="select-field bg-white/5 border-white/15" value={editForm.class} onChange={(e) => setEditForm((p) => ({ ...p, class: e.target.value, section: '' }))}>
+                                <option value="">Select Class</option>
+                                {availableClasses.map((c) => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                            <select className="select-field bg-white/5 border-white/15" value={editForm.section} onChange={(e) => setEditForm((p) => ({ ...p, section: e.target.value }))} disabled={!editForm.class}>
+                                <option value="">Select Section</option>
+                                {availableSections.map((s) => <option key={s} value={s}>{s}</option>)}
+                            </select>
                             <input className="input-field bg-white/5 border-white/15 sm:col-span-2" value={editForm.address} onChange={(e) => setEditForm((p) => ({ ...p, address: e.target.value }))} placeholder="Address" />
                             <input type="date" disabled className="input-field opacity-60 cursor-not-allowed" value={editForm.admissionDate} onChange={(e) => setEditForm((p) => ({ ...p, admissionDate: e.target.value }))} placeholder="Admission Date" />
                             <input className="input-field bg-white/5 border-white/15" value={editForm.bloodGroup} onChange={(e) => setEditForm((p) => ({ ...p, bloodGroup: e.target.value }))} placeholder="Blood Group" />

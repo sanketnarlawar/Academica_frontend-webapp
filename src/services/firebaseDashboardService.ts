@@ -2,7 +2,37 @@ import { firebaseStudentService } from './firebaseStudentService';
 import { firebaseTeacherService } from './firebaseTeacherService';
 import { firebaseFinanceService } from './firebaseFinanceService';
 import { firebaseAttendanceService } from './firebaseAttendanceService';
+import { firebaseAnnouncementService } from './firebaseAnnouncementService';
+import { firebaseClassService } from './firebaseClassService';
 import type { DashboardOverview, DashboardTrends } from '../types';
+
+const formatAlertTime = (dateValue: unknown): string => {
+  if (typeof dateValue === 'string') return dateValue;
+  if (dateValue && typeof dateValue === 'object' && 'seconds' in dateValue) {
+    const ts = dateValue as { seconds: number };
+    return new Date(ts.seconds * 1000).toLocaleString('en-IN');
+  }
+  return new Date().toLocaleString('en-IN');
+};
+
+const getAlertTypeFromPriority = (priority: 'low' | 'medium' | 'high') => {
+  if (priority === 'high') return 'warning' as const;
+  if (priority === 'medium') return 'info' as const;
+  return 'success' as const;
+};
+
+const normalizeClassKey = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
+  const raw = String(value).trim().toLowerCase();
+  if (!raw) return '';
+
+  const digitMatch = raw.match(/\d+/);
+  if (digitMatch) {
+    return String(parseInt(digitMatch[0], 10));
+  }
+
+  return raw.replace(/[^a-z]/g, '');
+};
 
 export const firebaseDashboardService = {
   /**
@@ -10,14 +40,40 @@ export const firebaseDashboardService = {
    */
   getOverview: async (): Promise<DashboardOverview> => {
     try {
-      const [students, teachers, totalCollected, totalPending, allAttendance] =
+      const [students, teachers, allAttendance, announcements, classSections, feeStructures, feePayments] =
         await Promise.all([
           firebaseStudentService.getStudents(),
           firebaseTeacherService.getTeachers(),
-          firebaseFinanceService.getTotalCollected(),
-          firebaseFinanceService.getTotalPending(),
           firebaseAttendanceService.getAllAttendance(),
+          firebaseAnnouncementService.getAnnouncements(),
+          firebaseClassService.getClasses(),
+          firebaseFinanceService.getFeeStructures(),
+          firebaseFinanceService.getFeePayments(),
         ]);
+
+      const totalCollected = feePayments
+        .filter((payment) => payment.status === 'paid' || payment.status === 'partial')
+        .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+
+      const feeStructureByClassKey = new Map<string, number>();
+      feeStructures.forEach((structure) => {
+        const key = normalizeClassKey(structure.class);
+        if (key && !feeStructureByClassKey.has(key)) {
+          feeStructureByClassKey.set(key, Number(structure.totalAmount || 0));
+        }
+      });
+
+      const totalPending = students.reduce((sum, student) => {
+        const classKey = normalizeClassKey(student.class);
+        const structureAmount = feeStructureByClassKey.get(classKey) || 0;
+        if (!structureAmount) return sum;
+
+        const studentPaid = feePayments
+          .filter((payment) => payment.studentId === student.id && (payment.status === 'paid' || payment.status === 'partial'))
+          .reduce((paidSum, payment) => paidSum + Number(payment.amount || 0), 0);
+
+        return sum + Math.max(0, structureAmount - studentPaid);
+      }, 0);
 
       // Calculate attendance percentage
       const today = new Date().toISOString().split('T')[0];
@@ -30,13 +86,22 @@ export const firebaseDashboardService = {
           ? Math.round((todayPresent / todayAttendance.length) * 100)
           : 0;
 
+      const alerts = announcements.slice(0, 6).map((announcement) => ({
+        id: announcement.id,
+        type: getAlertTypeFromPriority(announcement.priority),
+        title: announcement.title,
+        message: announcement.content,
+        time: formatAlertTime(announcement.date),
+      }));
+
       return {
         totalStudents: students.length,
         totalTeachers: teachers.length,
-        totalClasses: 10, // Hardcoded for now - can be fetched from separate collection
+        totalClasses: Array.from(new Set(classSections.map((item) => normalizeClassKey(item.name)).filter(Boolean))).length,
         feesCollected: totalCollected,
         pendingFees: totalPending,
         attendancePercentage,
+        alerts,
       };
     } catch (error) {
       console.error('Error fetching dashboard overview:', error);

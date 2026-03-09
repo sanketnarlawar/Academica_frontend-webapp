@@ -4,7 +4,7 @@ import { getFirestore, type Firestore } from 'firebase/firestore';
 
 // ⚠️ IMPORTANT: Replace these with your actual Firebase credentials
 // Get them from: https://console.firebase.google.com → Project Settings
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "YOUR_API_KEY",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "your-project.firebaseapp.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "your-project-id",
@@ -14,7 +14,7 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase Authentication and get a reference to the service
 export const auth: Auth = getAuth(app);
